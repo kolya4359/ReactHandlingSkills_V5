@@ -1,4 +1,4 @@
-// 라우트 처리 함수들을 따로 분리해서 관리하는 파일.
+// 포스트 라우트 처리 함수들을 따로 분리해서 관리하는 파일.
 
 import Post from '../../models/post';
 import mongoose from 'mongoose';
@@ -6,10 +6,34 @@ import Joi from 'joi';
 
 const { ObjectId } = mongoose.Types;
 
-export const checkObjectId = (ctx, next) => {
+// 해당 미들웨어에서 id로 포스트를 찾은 후 ctx.state에 담아 준다.
+export const getPostById = async (ctx, next) => {
   const { id } = ctx.params;
   if (!ObjectId.isValid(id)) {
     ctx.status = 400; // Bad Request
+    return;
+  }
+  try {
+    const post = await Post.findById(id);
+    // 포스트가 존재하지 않을 때
+    if (!post) {
+      ctx.status = 404; // Not Found
+      return;
+    }
+    ctx.state.post = post;
+    return next();
+  } catch (e) {
+    ctx.throw(500, e);
+  }
+};
+
+// id로 찾은 포스트가 로그인 중인 사용자가 작성한 포스트인지 확인해 준다.
+// 만약 사용자의 포스트가 아니라면 403 에러를 발생시킨다.
+export const checkOwnPost = (ctx, next) => {
+  const { user, post } = ctx.state;
+  // MongoDB에서 조회한 데이터의 id값을 문자열과 비교할 때는 반드시 .toString()을 해 주어야 한다.
+  if (post.user._id.toString() !== user._id) {
+    ctx.status = 403;
     return;
   }
   return next();
@@ -45,6 +69,7 @@ export const write = async (ctx) => {
     title,
     body,
     tags,
+    user: ctx.state.user,
   });
   try {
     await post.save();
@@ -56,7 +81,7 @@ export const write = async (ctx) => {
 
 /*
   데이터 조회
-  GET /api/posts
+  GET /api/posts?username=&tag=&page=
 */
 export const list = async (ctx) => {
   // query는 문자열이기 때문에 숫자로 변환해 주어야 한다.
@@ -68,18 +93,28 @@ export const list = async (ctx) => {
     return;
   }
 
+  const { tag, username } = ctx.query;
+  // tag, username 값이 유효하면 객체 안에 넣고, 그렇지 않으면 넣지 않음
+  const query = {
+    ...(username ? { 'user.username': username } : {}),
+    ...(tag ? { tags: tag } : {}),
+  };
+  // 위의 query를 선언하는 방식은 username 혹은 tag 값이 유효할 때만 객체 안에 해당 값을 넣겠다는 것을 의미한다.
+  // { username, tags: tag } 와 같은 형식으로 객체를 만들면 요청을 받을 때 username이나 tag 값이 주어지지 않는다.
+  // 이 경우에는 undefined 값이 들어가게 되고, 데이터를 조회할 수 없다.
+
   try {
     // find() 함수를 호출한 후에 exec()를 붙여 주어야 서버에 쿼리를 요청한다.
     // sort() 함수의 key는 정렬할 필드를 설정하는 부분이고, 오른쪽 값을 1로 하면 오름차순, -1로 하면 내림차순으로 정렬한다.
     // limit() 함수는 보이는 개수를 제한한다. limit(10)은 10개로 제한한다는 뜻이다.
     // skip() 함수에 파라미터로 10을 넣어주면, 처음 열 개를 제외하고 그다음 데이터를 불러온다.
-    const posts = await Post.find()
+    const posts = await Post.find(query)
       .sort({ _id: -1 })
       .limit(10)
       .skip((page - 1) * 10)
       .exec();
     // Last-Page라는 커스텀 HTTP 헤더를 설정했다. 마지막 페이지의 번호를 HTTP 헤더를 통해 알 수 있게 했다.
-    const postCount = await Post.countDocuments().exec();
+    const postCount = await Post.countDocuments(query).exec();
     ctx.set('Last-Page', Math.ceil(postCount / 10));
     // 포스트 본문의 내용의 길이를 200자로 제한한다.
     // find()를 통해 조회한 데이터는 mongoose 문서 인스턴스의 형태이므로 데이터를 바로 변형할 수 없다.
@@ -101,18 +136,9 @@ export const list = async (ctx) => {
   특정 포스트 조회
   GET /api/posts/:id
 */
+// getPostById 미들웨어에서 id로 포스트를 찾아주기 때문에 특정 포스트를 조회하는 read 코드가 간략해졌다.
 export const read = async (ctx) => {
-  const { id } = ctx.params;
-  try {
-    const post = await Post.findById(id).exec();
-    if (!post) {
-      ctx.status = 404; // Not Found
-      return;
-    }
-    ctx.body = post;
-  } catch (e) {
-    ctx.throw(500, e);
-  }
+  ctx.body = ctx.state.post;
 };
 
 /*

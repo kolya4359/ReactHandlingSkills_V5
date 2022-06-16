@@ -11,6 +11,11 @@ const PostSchema = new Schema({
     type: Date,
     default: Date.now, // 현재 날짜를 기본값으로 지정
   },
+  // 로그인한 사용자가 이용할 수 있도록 하기 위해 포스트 스키마에 유저 정보를 넣어준다.
+  user: {
+    _id: mongoose.Types.ObjectId,
+    username: String,
+  },
 });
 
 const Post = mongoose.model('Post', PostSchema);

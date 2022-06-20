@@ -3,8 +3,33 @@
 import Post from '../../models/post';
 import mongoose from 'mongoose';
 import Joi from 'joi';
+import sanitizeHtml from 'sanitize-html';
 
 const { ObjectId } = mongoose.Types;
+
+const sanitizeOption = {
+  allowedTags: [
+    'h1',
+    'h2',
+    'b',
+    'i',
+    'u',
+    's',
+    'p',
+    'ul',
+    'ol',
+    'li',
+    'blockquote',
+    'a',
+    'img',
+  ],
+  allowedAttributes: {
+    a: ['href', 'name', 'target'],
+    img: ['src'],
+    li: ['class'],
+  },
+  allowedSchemes: ['data', 'http'],
+};
 
 // 해당 미들웨어에서 id로 포스트를 찾은 후 ctx.state에 담아 준다.
 export const getPostById = async (ctx, next) => {
@@ -67,7 +92,7 @@ export const write = async (ctx) => {
   const { title, body, tags } = ctx.request.body;
   const post = new Post({
     title,
-    body,
+    body: sanitizeHtml(body, sanitizeOption),
     tags,
     user: ctx.state.user,
   });
@@ -79,6 +104,13 @@ export const write = async (ctx) => {
   }
 };
 
+// html을 없애고 내용이 너무 길면 200자로 제한하는 함수
+const removeHtmlAndShorten = (body) => {
+  const filtered = sanitizeHtml(body, {
+    allowedTags: [],
+  });
+  return filtered.length < 200 ? filtered : `${filtered.slice(0, 200)}...`;
+};
 /*
   데이터 조회
   GET /api/posts?username=&tag=&page=
@@ -112,6 +144,7 @@ export const list = async (ctx) => {
       .sort({ _id: -1 })
       .limit(10)
       .skip((page - 1) * 10)
+      .lean()
       .exec();
     // Last-Page라는 커스텀 HTTP 헤더를 설정했다. 마지막 페이지의 번호를 HTTP 헤더를 통해 알 수 있게 했다.
     const postCount = await Post.countDocuments(query).exec();
@@ -119,14 +152,10 @@ export const list = async (ctx) => {
     // 포스트 본문의 내용의 길이를 200자로 제한한다.
     // find()를 통해 조회한 데이터는 mongoose 문서 인스턴스의 형태이므로 데이터를 바로 변형할 수 없다.
     // 그 대신 toJSON() 함수를 실행하여 JSON 형태로 변환한 뒤 필요한 변형을 일으켜 주어야 한다.
-    ctx.body = posts
-      .map((post) => post.toJSON())
-      .map((post) => ({
-        ...post,
-        body:
-          post.body.length < 200 ? post.body : `${post.body.slice(0, 200)}...`,
-      }));
-    ctx.body = posts;
+    ctx.body = posts.map((post) => ({
+      ...post,
+      body: removeHtmlAndShorten(post.body),
+    }));
   } catch (e) {
     ctx.throw(500, e);
   }
@@ -181,8 +210,13 @@ export const update = async (ctx) => {
     return;
   }
 
+  const nextData = { ...ctx.request.body }; // 객체를 복사하고
+  // body 값이 주어졌으면 HTML 필터링
+  if (nextData.body) {
+    nextData.body = sanitizeHtml(nextData.body, sanitizeOption);
+  }
   try {
-    const post = await Post.findByIdAndUpdate(id, ctx.request.body, {
+    const post = await Post.findByIdAndUpdate(id, nextData, {
       new: true, // 이 값을 설정하면 업데이트된 데이터를 반환한다.
       // false일 때는 업데이트되기 전의 데이터를 반환한다.
     }).exec();

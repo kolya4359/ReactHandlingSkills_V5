@@ -22,6 +22,8 @@ export default function createRequestSaga(type, request) {
       yield put({
         type: SUCCESS,
         payload: response.data,
+        meta: response, // 마지막 페이지 번호를 HTTP 헤더를 통해 클라이언트에 전달하기 위해
+        // 액션 안에 meta 값을 response로 넣어 준다.
       });
     } catch (e) {
       yield put({

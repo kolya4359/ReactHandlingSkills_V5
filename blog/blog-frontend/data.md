@@ -35,3 +35,11 @@
 - username, password, passwordConfirm 중 하나라도 비어 있을 때
 - password와 passwordConfirm 값이 일치하지 않을 때
 - username이 중복될 때
+
+## 글쓰기 기능 구현 순서
+
+- UI를 만든다.
+- 기능을 구현한다.
+- Quill 에디터를 사용했는데 Quill 에디터는 일반 input, textarea과 다르기 때문에 onChange와 value 값을 사용하여 상태를 관리할 수 없다.  
+  그래서 에디터에서 값이 바뀔 때 리덕스 스토어에 값을 넣는 작업을 우선 구현하고, 리덕스 스토어의 값이 바뀔 때 에디터 값이 바뀌게 하는 작업을 추가로 구현해준다.
+- 글쓰기 API 연동

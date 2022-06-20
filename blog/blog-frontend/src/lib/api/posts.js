@@ -12,6 +12,14 @@ export const listPosts = ({ page, username, tag }) => {
     params: { page, username, tag },
   });
 };
-
-// lostPosts API를 호출할 때 파라미터로 값을 넣어 주면
+// listPosts API를 호출할 때 파라미터로 값을 넣어 주면
 // /api/posts?username=tester&page=2와 같이 주소를 만들어서 호출한다.
+
+export const updatePost = ({ id, title, body, tags }) =>
+  client.patch(`/api/posts/${id}`, {
+    title,
+    body,
+    tags,
+  });
+
+export const removePost = (id) => client.delete(`/api/posts/${id}`);

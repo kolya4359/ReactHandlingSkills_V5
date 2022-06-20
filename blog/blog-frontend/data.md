@@ -54,3 +54,22 @@
 - 제목
 - 작성된 시간
 - 내용
+
+## 수정 / 삭제 버튼 구현
+
+작성자에게만 나타나는 수정 / 삭제 버튼을 만든다.  
+PostViewer 컴포넌트 안에 나타나도록 만드는데 PostViewer에서 직접 렌더링하면, 나중에 PostActionButtons에 props를 전달할 때 무조건 PostViewer를 거쳐서 전달해야 한다.  
+정작 PostViewer 내부에서는 사용하지 않지만 내부의 컴포넌트에서 필요하기 때문에 한 번 거쳐 전달하는 것은 불편하다.  
+그래서 props를 JSX 형태로 받아 와서 렌더링한다.
+
+```js
+// example
+<PostViewer
+  post={post}
+  loading={loading}
+  error={error}
+  actionButtons={<PostActionButtons onEdit={onEdit} onRemove={onRemove} />}
+/>
+```
+
+이 방법은 굳이 컨테이너 컴포넌트를 새로 만들 필요 없이 기존 PostViewerContainer에서 필요한 로직을 작성하면 된다.
